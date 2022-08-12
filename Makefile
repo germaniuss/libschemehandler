@@ -4,8 +4,9 @@
 
 # Compiler settings - Can be customized.
 CC = gcc
-CXXFLAGS = -std=c11 -Wall
-LDFLAGS = 
+CXXFLAGS = -std=c99 -Wall -g -pedantic -lm -I./src
+LDFLAGS = -L. -lschemehandler
+LIBNAME = libschemehandler
 
 # Makefile settings - Can be customized.
 APPNAME = myapp
@@ -32,7 +33,7 @@ WDELOBJ = $(SRC:$(SRCDIR)/%$(EXT)=$(OBJDIR)\\%.o)
 all: $(APPNAME)
 
 # Builds the app
-$(APPNAME): $(OBJ)
+$(APPNAME): $(OBJ) $(LIBNAME).a
 	$(CC) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
 
 # Creates the dependecy rules
@@ -46,11 +47,16 @@ $(APPNAME): $(OBJ)
 $(OBJDIR)/%.o: $(SRCDIR)/%$(EXT)
 	$(CC) $(CXXFLAGS) -o $@ -c $<
 
+$(LIBNAME).a: $(OBJ)
+	ar rcs $@ $^
+
+lib: $(LIBNAME).a
+
 ################### Cleaning rules for Unix-based OS ###################
 # Cleans complete project
 .PHONY: clean
 clean:
-	$(RM) $(DELOBJ) $(DEP) $(APPNAME)
+	$(RM) $(DELOBJ) $(DEP) $(APPNAME) $(LIBNAME).a
 
 # Cleans only all files with the extension .d
 .PHONY: cleandep
@@ -61,7 +67,7 @@ cleandep:
 # Cleans complete project
 .PHONY: cleanw
 cleanw:
-	$(DEL) $(WDELOBJ) $(DEP) $(APPNAME)$(EXE)
+	$(DEL) $(WDELOBJ) $(DEP) $(APPNAME)$(EXE) $(LIBNAME).a
 
 # Cleans only all files with the extension .d
 .PHONY: cleandepw
