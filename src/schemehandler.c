@@ -16,6 +16,13 @@
 #include "ini.h"
 #include "thread.h"
 
+typedef struct scheme_handler {
+    bool info;
+    char* value;
+    char* pipe_name;
+    struct thread* th;
+} scheme_handler;
+
 typedef struct callback_data {
     scheme_handler* handler;
     void* data;
