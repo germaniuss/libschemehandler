@@ -2,6 +2,7 @@
 #define SCHEME_HANDLER_H
 
 #include <stdbool.h>
+#include <pthread.h>
 
 #define SCHEME_HANDLER_VERSION "0.7.2"
 
@@ -12,6 +13,6 @@ bool scheme_open(const char* url);
 scheme_handler* app_open(int argc, char* argv[], const char* dir);
 
 // recreate this in any language (only here for testing)
-void listen_callback(scheme_handler* handler, void* (*callback)(void* data, const char* value), void* in);
+pthread_t listen_callback(scheme_handler* handler, void* (*callback)(void* data, const char* value), void* in);
 
 #endif

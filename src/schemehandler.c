@@ -14,13 +14,12 @@
 #include "option.h"
 #include "str.h"
 #include "ini.h"
-#include "thread.h"
 
 typedef struct scheme_handler {
     bool info;
     char* value;
     char* pipe_name;
-    struct thread* th;
+    pthread_t th;
 } scheme_handler;
 
 typedef struct callback_data {
@@ -236,10 +235,7 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir) {
         }
 
         handler->pipe_name = myfifo;
-        struct thread* th = (struct thread*) malloc(sizeof(struct thread));
-        handler->th = th;
-        thread_init(th);
-        thread_start(th, thread_task, handler);
+        pthread_create(&handler->th, NULL, &thread_task, handler);
 
         if (*args.launch) {
             int fd = open(myfifo, O_WRONLY);
@@ -262,12 +258,12 @@ void uri_handle_loop(callback_data* data) {
 }
 
 // recreate this in any language (only here for testing)
-void listen_callback(scheme_handler* handler, void* (*callback)(void* data, const char* value), void* in) {
-    struct thread th;
+pthread_t listen_callback(scheme_handler* handler, void* (*callback)(void* data, const char* value), void* in) {
     callback_data* data = (callback_data*) malloc(sizeof(callback_data));
     data->data = in;
     data->handler = handler;
     data->callback = callback;
-    uri_handle_loop(data);
-    return th;
+    pthread_t ptr;
+    pthread_create(&ptr, NULL, uri_handle_loop, data);
+    return ptr;
 }
