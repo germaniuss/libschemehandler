@@ -2,11 +2,8 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <sys/file.h>
 #include <fcntl.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <unistd.h>
+#include <sys/file.h>
 #include <errno.h>
 #include <string.h>
 
@@ -14,6 +11,8 @@
 #include "option.h"
 #include "str.h"
 #include "ini.h"
+#include "path.h"
+#include "pipe.h"
 
 typedef struct scheme_handler {
     bool info;
@@ -35,45 +34,6 @@ typedef struct app_args {
     char* executable;
     char* scheme;
 } app_args;
-
-char* get_exec_name(const char* local) {
-    char* val = str_create(local);
-    char* save = NULL;
-    char* execname = NULL;
-    char* token = NULL;
-
-    if (*val == '/') return val;
-
-    while (token = str_token_begin(val, &save, "/")) {
-        str_destroy(&execname);
-        execname = str_create(token);
-    } str_destroy(&val);
-
-    char buf[FILENAME_MAX];
-    return str_create_fmt("%s/%s", getcwd(buf, FILENAME_MAX), execname);
-};
-
-char* get_local_dir(const char* local) {
-    char* val = str_create(local);
-    char* save = NULL;
-    char* execname = NULL;
-    char* token = NULL;
-
-    char buf[FILENAME_MAX];
-    if (*val != '/') return getcwd(buf, FILENAME_MAX);
-
-    char* returnVal= NULL;
-    while (token = str_token_begin(val, &save, "/")) {
-        str_destroy(&returnVal);
-        returnVal = execname;
-        execname = str_create(val);
-    } 
-    
-    str_destroy(&val);
-    str_destroy(&execname);
-
-    return returnVal;
-}
 
 static struct option_item options[] = {{.letter = 'l', .name = "uri-launch"},
                                        {.letter = 'r', .name = "uri-register"},
@@ -167,9 +127,11 @@ void* thread_task(void* arg) {
     char buf[FILENAME_MAX];
     while (true) {
         while (handler->info);
-        int fd = open(handler->pipe_name, O_RDONLY);
-        read(fd, buf, FILENAME_MAX);
-        close(fd);
+        my_pipe pipe;
+        pipe_open(&pipe, handler->pipe_name, "r");
+        char buf[FILENAME_MAX];
+        pipe_read(&pipe, buf, FILENAME_MAX);
+        pipe_close(&pipe);
         handler->value = str_create(buf);
         handler->info = true;
     }
@@ -179,7 +141,6 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir) {
     
     scheme_handler* handler = (scheme_handler*) malloc(sizeof(scheme_handler));
     handler->info = false;
-    handler->th = NULL;
 
     app_args args;
     args.launch = "";
@@ -209,17 +170,15 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir) {
         }
     }
 
-    char * myfifo = "/tmp/myfifo";
-    mkfifo(myfifo, 0666);
+    my_pipe pipe;
+    pipe_create(&pipe, "myfifo", 0666);
 
     int pid_file = open(args.executable, O_RDONLY | O_EXCL, 0666);
     if(flock(pid_file, LOCK_EX | LOCK_NB) && EWOULDBLOCK == errno && *args.launch) {
         // this is the second instance
-        printf("URI launch string is: %s\n", args.launch);
-        // pipe the launch arguments to the first process
-        int fd = open(myfifo, O_WRONLY);
-        write(fd, args.launch, strlen(args.launch) + 1);
-        close(fd);
+        pipe_open(&pipe, pipe.name, "w");
+        pipe_write(&pipe, args.launch);
+        pipe_close(&pipe);
         return NULL;
     } else {
         // this is the first instance
@@ -234,13 +193,13 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir) {
             }
         }
 
-        handler->pipe_name = myfifo;
+        handler->pipe_name = pipe.name;
         pthread_create(&handler->th, NULL, &thread_task, handler);
 
         if (*args.launch) {
-            int fd = open(myfifo, O_WRONLY);
-            write(fd, args.launch, strlen(args.launch) + 1);
-            close(fd);
+            pipe_open(&pipe, pipe.name, "w");
+            pipe_write(&pipe, args.launch);
+            pipe_close(&pipe);
         }
 
         return handler;
@@ -248,7 +207,8 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir) {
 }
 
 // recreate this in any language (only here for testing)
-void uri_handle_loop(callback_data* data) {
+void uri_handle_loop(void* in) {
+    callback_data* data = (callback_data*) in;
     scheme_handler* handler = data->handler;
     while (true) {
         while (!handler->info);
@@ -264,6 +224,6 @@ pthread_t listen_callback(scheme_handler* handler, void* (*callback)(void* data,
     data->handler = handler;
     data->callback = callback;
     pthread_t ptr;
-    pthread_create(&ptr, NULL, uri_handle_loop, data);
+    pthread_create(&ptr, NULL, &uri_handle_loop, data);
     return ptr;
 }
