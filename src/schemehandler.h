@@ -6,7 +6,12 @@
 
 #define SCHEME_HANDLER_VERSION "0.7.2"
 
-typedef struct scheme_handler scheme_handler;
+typedef struct scheme_handler {
+    bool info;
+    char* value;
+    char* pipe_name;
+    pthread_t th;
+} scheme_handler;
 
 bool scheme_register(const char* protocol, const char* handler, bool terminal);
 bool scheme_open(const char* url);

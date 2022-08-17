@@ -1,43 +1,38 @@
 #include <stdio.h>
+#include <unistd.h>
+#include <string.h>
 #include "path.h"
 
 #include "str.h"
 
-char* get_exec_name(const char* local) {
-    char* val = str_create(local);
-    char* save = NULL;
-    char* execname = NULL;
-    char* token = NULL;
-
-    if (*val == '/') return val;
-
-    while (token = str_token_begin(val, &save, "/")) {
-        str_destroy(&execname);
-        execname = str_create(token);
-    } str_destroy(&val);
-
+char* getexecname() {
+    // On linux
     char buf[FILENAME_MAX];
-    return str_create_fmt("%s/%s", getcwd(buf, FILENAME_MAX), execname);
+    int bytes = readlink("/proc/self/exe", buf, FILENAME_MAX);
+    buf[bytes] = 0;
+    return str_create(buf);
 };
 
-char* get_local_dir(const char* local) {
-    char* val = str_create(local);
-    char* save = NULL;
-    char* execname = NULL;
-    char* token = NULL;
-
-    char buf[FILENAME_MAX];
-    if (*val != '/') return getcwd(buf, FILENAME_MAX);
-
-    char* returnVal= NULL;
-    while (token = str_token_begin(val, &save, "/")) {
-        str_destroy(&returnVal);
-        returnVal = execname;
-        execname = str_create(val);
-    } 
-    
+char* getexecdir() {
+    // On linux
+    char* val = getexecname();
+    char * tld = strrchr(val, '/');
+    *tld = '\0';
+    char* ret = str_create(val);
     str_destroy(&val);
-    str_destroy(&execname);
+    return ret;
+}
 
-    return returnVal;
+char* getcurrentdir() {
+    // On linux
+    char buf[FILENAME_MAX];
+    getcwd(buf, FILENAME_MAX);
+    return str_create(buf);
+}
+
+void path_add(char** path, const char* dir) {
+    if (*dir == '/' || *path == NULL) {
+        str_destroy(path);
+        *path = str_create(dir);
+    } else if (*dir) str_append_fmt(path, "/%s", dir);
 }

@@ -14,13 +14,6 @@
 #include "path.h"
 #include "pipe.h"
 
-typedef struct scheme_handler {
-    bool info;
-    char* value;
-    char* pipe_name;
-    pthread_t th;
-} scheme_handler;
-
 typedef struct callback_data {
     scheme_handler* handler;
     void* data;
@@ -96,22 +89,14 @@ int process_ini(void *arg, int line, const char *section, const char *key, const
 }
 
 int load(app_args* args, const char* dir) {
-    char* full_dir = NULL;
-    if (dir[0] != '\0') str_append_fmt(&full_dir, "%s/", dir);
-    str_append(&full_dir, "scheme_config.ini");
-    int rc = ini_parse_file(args, process_ini, full_dir);
-    str_destroy(&full_dir);
+    int rc = ini_parse_file(args, process_ini, dir);
     return rc;
 }
 
 bool save(app_args* args, const char* dir) {
     char* key; char* value;
-    char* full_dir = NULL;
-    if (dir[0] != '\0') str_append_fmt(&full_dir, "%s/", dir);
-    str_append(&full_dir, "scheme_config.ini");
 
-    FILE *fp = fopen(full_dir, "w");
-    str_destroy(&full_dir);
+    FILE *fp = fopen(dir, "w");
     if (fp == NULL) return NULL;
 
     fprintf(fp, "registered=%s\n", args->regist ? "true" : "false");
@@ -147,10 +132,12 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir) {
     args.scheme = "";
     args.regist = true;
     args.terminal = true;
-    args.executable = get_exec_name(argv[0]);
-    char* config_dir = get_local_dir(argv[0]);
-    if (*dir) str_append_fmt(&config_dir, "/%s", dir);
-
+    args.executable = getexecname();
+    printf("%s\n", args.executable);
+    char* config_dir = getexecdir();
+    path_add(&config_dir, dir);
+    path_add(&config_dir, "scheme_config.ini");
+    
     load(&args, config_dir);
 
     struct option opt = {.argv = argv,

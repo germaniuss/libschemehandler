@@ -3,7 +3,9 @@
 
 #define PATH_VERSION "1.0.0"
 
-char* get_exec_name(const char* local);
-char* get_local_dir(const char* local);
+char* getexecname();
+char* getexecdir();
+char* getcurrentdir();
+void path_add(char** path, const char* dir);
 
 #endif
