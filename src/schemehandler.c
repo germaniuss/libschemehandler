@@ -2,9 +2,6 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
-#include <fcntl.h>
-#include <sys/file.h>
-#include <errno.h>
 #include <string.h>
 
 #include "schemehandler.h"
@@ -112,11 +109,11 @@ void* thread_task(void* arg) {
     char buf[FILENAME_MAX];
     while (true) {
         while (handler->info);
-        my_pipe pipe;
-        pipe_open(&pipe, handler->pipe_name, "r");
+        file_desc pipe;
+        pipe_open(&pipe, handler->pipe_name, READONLY);
         char buf[FILENAME_MAX];
-        pipe_read(&pipe, buf, FILENAME_MAX);
-        pipe_close(&pipe);
+        file_read(&pipe, buf, FILENAME_MAX);
+        file_close(&pipe);
         handler->value = str_create(buf);
         handler->info = true;
     }
@@ -157,15 +154,16 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir) {
         }
     }
 
-    my_pipe pipe;
-    pipe_create(&pipe, "myfifo", 0666);
+    file_desc pipe;
+    pipe_create(&pipe, "myfifo");
 
-    int pid_file = open(args.executable, O_RDONLY | O_EXCL, 0666);
-    if(flock(pid_file, LOCK_EX | LOCK_NB) && EWOULDBLOCK == errno && *args.launch) {
+    file_desc lock;
+    if(file_open(&lock, args.executable, READONLY | EXCLUSIVE | O_NONBLOCK, true)) {
+        if (!*args.launch) return NULL;
         // this is the second instance
-        pipe_open(&pipe, pipe.name, "w");
-        pipe_write(&pipe, args.launch);
-        pipe_close(&pipe);
+        pipe_open(&pipe, pipe.name, WRITEONLY);
+        file_write(&pipe, args.launch);
+        file_close(&pipe);
         return NULL;
     } else {
         // this is the first instance
@@ -184,9 +182,9 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir) {
         pthread_create(&handler->th, NULL, &thread_task, handler);
 
         if (*args.launch) {
-            pipe_open(&pipe, pipe.name, "w");
-            pipe_write(&pipe, args.launch);
-            pipe_close(&pipe);
+            pipe_open(&pipe, pipe.name, WRITEONLY);
+            file_write(&pipe, args.launch);
+            file_close(&pipe);
         }
 
         return handler;

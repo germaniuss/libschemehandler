@@ -10,7 +10,7 @@ char* get_full_name(const char* name) {
     return full_name;
 }
 
-void pipe_create(my_pipe* pipe, const char* name, unsigned int mode) {
+void pipe_create(file_desc* pipe, const char* name) {
     char* full_name = get_full_name(name);
     pipe->hPipe = CreateNamedPipe(
         TEXT(full_name),
@@ -24,23 +24,27 @@ void pipe_create(my_pipe* pipe, const char* name, unsigned int mode) {
     ); free(full_name);
 }
 
-void pipe_open(my_pipe* pipe, const char* name, const char* read_write) {
+void pipe_open(file_desc* pipe, const char* name, int mode) {
     char* full_name = get_full_name(name);
-    pipe->hPipe = CreateFile(TEXT(full_name), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL); 
+    file_open(pipe, full_name, mode);
     free(full_name);
 }
 
-char* pipe_read(my_pipe* pipe, char buf[], unsigned int size) {
+void file_open(file_desc* pipe, const char* name, int mode) {
+    pipe->hPipe = CreateFile(TEXT(name), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL); 
+}
+
+char* file_read(file_desc* pipe, char buf[], unsigned int size) {
     DWORD dwRead;
     ReadFile(pipe->hPipe, buf, size, &dwRead, NULL);
 }
 
-void pipe_write(my_pipe* pipe, const char* str) {
+void file_write(file_desc* pipe, const char* str) {
     DWORD dwWritten;
     WriteFile(pipe->hPipe,str, strlen(str) + 1, &dwWritten, NULL);
 }
 
-void pipe_close(my_pipe* pipe) {
+void file_close(file_desc* pipe) {
     CloseHandle(pipe->hPipe);
 }
 
@@ -53,33 +57,34 @@ char* get_full_name(const char* name) {
     return full_name;
 }
 
-void pipe_create(my_pipe* pipe, const char* name, unsigned int mode) {
+void pipe_create(file_desc* pipe, const char* name) {
     char* full_name = get_full_name(name);
-    mkfifo(full_name, mode);
+    mkfifo(full_name, 0666);
     pipe->name = name;
     free(full_name);
 }
 
-void pipe_open(my_pipe* pipe, const char* name, const char* read_write) {
+void pipe_open(file_desc* pipe, const char* name, int mode) {
     char* full_name = get_full_name(name);
-    if (strcmp(read_write, "w") == 0)
-        pipe->fd = open(full_name, O_WRONLY);
-    else if (strcmp(read_write, "r") == 0)
-        pipe->fd = open(full_name, O_RDONLY);
-    else if (strcmp(read_write, "wr") == 0)
-        pipe->fd = open(full_name, O_RDWR);
+    file_open(pipe, full_name, mode, 0);
     free(full_name);
 }
 
-char* pipe_read(my_pipe* pipe, char buf[], unsigned int size) {
+int file_open(file_desc* pipe, const char* name, int mode, int lock) {
+    pipe->fd = open(name, mode, 0666);
+    if (lock) return (flock(pipe->fd, LOCK_EX | LOCK_NB) && EWOULDBLOCK == errno);
+    return NULL;
+}
+
+char* file_read(file_desc* pipe, char buf[], unsigned int size) {
     read(pipe->fd, buf, size);
 }
 
-void pipe_write(my_pipe* pipe, const char* str) {
+void file_write(file_desc* pipe, const char* str) {
     write(pipe->fd, str, strlen(str) + 1);
 }
 
-void pipe_close(my_pipe* pipe) {
+void file_close(file_desc* pipe) {
     close(pipe->fd);
 }
 
