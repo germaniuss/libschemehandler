@@ -51,6 +51,24 @@ bool scheme_register(const char* protocol, const char* handler, bool terminal) {
 }
 #elif defined(_WIN32) || defined(_WIN64)
 bool scheme_register(const char* protocol, const char* handler, bool terminal) {
+    DWORD number = 0x00000001; 
+    HKEY key;
+
+    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Authentication\\LogonUI\\Background", 0, KEY_SET_VALUE | KEY_WOW64_64KEY, &key) == ERROR_SUCCESS) {
+        printf("Key location open successful \n");
+        if (RegSetValueExW(key, L"OEMBackground", 0, REG_DWORD, (LPBYTE)&number, sizeof(DWORD)) == ERROR_SUCCESS) {
+            printf("Key changed in registry \n");
+        } else {
+            printf("Key not changed in registry \n");
+            printf("Error %u ", (unsigned int)GetLastError());
+            return false;
+        }
+        RegCloseKey(key);
+        return true;
+    }
+    printf("Unsuccessful in opening key  \n");
+    printf("Cannot find key value in registry \n");
+    printf("Error: %u ", (unsigned int)GetLastError());
     return false;
 }
 #elif defined(TARGET_OS_MAC) || defined(__MAC__)
