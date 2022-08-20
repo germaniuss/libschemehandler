@@ -54,6 +54,19 @@ bool scheme_register(const char* protocol, const char* handler, bool terminal) {
     DWORD number = 0x00000001; 
     HKEY key;
 
+    /*
+    RegistryKey key;
+    key = Registry.ClassesRoot.CreateSubKey("foo");
+    key.SetValue("", "URL: Foo Protocol");
+    key.SetValue("URL Protocol","");
+
+    key = key.CreateSubKey("shell");
+    key = key.CreateSubKey("open");
+    key = key.CreateSubKey("command");
+    key.SetValue("", "C:\\oggsplit.exe");
+
+    */
+
     if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Authentication\\LogonUI\\Background", 0, KEY_SET_VALUE | KEY_WOW64_64KEY, &key) == ERROR_SUCCESS) {
         printf("Key location open successful \n");
         if (RegSetValueExW(key, L"OEMBackground", 0, REG_DWORD, (LPBYTE)&number, sizeof(DWORD)) == ERROR_SUCCESS) {
