@@ -79,17 +79,21 @@ void pipe_create(file_desc* pipe, const char* name) {
     free(full_name);
 }
 
-int pipe_open(file_desc* pipe, const char* name, int mode) {
-    char* full_name = get_full_name(name);
+int pipe_open(file_desc* pipe, int mode) {
+    char* full_name = get_full_name(pipe->name);
     int ret = file_open(pipe, full_name, mode, 0);
     free(full_name);
     return ret;
 }
 
+void pipe_close(file_desc* pipe) {
+    file_close(pipe);
+}
+
 int file_open(file_desc* pipe, const char* name, int mode, int lock) {
     pipe->fd = open(name, mode, 0666);
-    if (lock) return (flock(pipe->fd, LOCK_EX | LOCK_NB) && EWOULDBLOCK == errno);
-    return NULL;
+    if (lock) return (!flock(pipe->fd, LOCK_EX | LOCK_NB) || EWOULDBLOCK != errno);
+    return pipe->fd != -1;
 }
 
 char* file_read(file_desc* pipe, char buf[], unsigned int size) {
