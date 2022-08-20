@@ -4,6 +4,15 @@
 #if defined(_WIN32) || defined(_WIN64)
 
 void pipe_create(file_desc* pipe, const char* name) {
+
+    // all access secutrity descriptor
+    PSECURITY_DESCRIPTOR psd = NULL;
+    BYTE  sd[SECURITY_DESCRIPTOR_MIN_LENGTH];
+    psd = (PSECURITY_DESCRIPTOR)sd;
+    InitializeSecurityDescriptor(psd, SECURITY_DESCRIPTOR_REVISION);
+    SetSecurityDescriptorDacl(psd, TRUE, (PACL)NULL, FALSE);
+    SECURITY_ATTRIBUTES sa = {sizeof(sa), psd, FALSE};
+
     pipe->name = (char*) malloc(strlen(name) + 10);
     memcpy(pipe->name, "\\\\.\\pipe\\", 10);
     strcat(pipe->name, name);
@@ -15,7 +24,7 @@ void pipe_create(file_desc* pipe, const char* name) {
         1024 * 16,
         1024 * 16,
         NMPWAIT_USE_DEFAULT_WAIT,
-        NULL
+        &sa
     );
 }
 
@@ -54,15 +63,10 @@ void file_close(file_desc* pipe) {
 
 #else
 
-char* get_full_name(const char* name) {
-    char* full_name = (char*) malloc(strlen(name) + 6);
-    memcpy(full_name, "/tmp/", 6);
-    strcat(full_name, name);
-    return full_name;
-}
-
 void pipe_create(file_desc* pipe, const char* name) {
-    pipe->name = get_full_name(name);
+    pipe->name = (char*) malloc(strlen(name) + 6);
+    memcpy(pipe->name, "/tmp/", 6);
+    strcat(pipe->name, name);
     mkfifo(pipe->name, 0666);
 }
 
