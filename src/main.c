@@ -6,9 +6,8 @@ void* handle_url_request(void* data, char* value) {
 }
 
 int main(int argc, char* argv[]) {
-    scheme_handler* handler = app_open(argc, argv, "");
+    scheme_handler* handler = app_open(argc, argv, "", &handle_url_request, NULL);
     if (handler) {
-        pthread_t* th = listen_callback(handler, &handle_url_request, NULL);
         getchar();
     } return 0;
 }

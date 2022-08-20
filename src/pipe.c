@@ -12,6 +12,7 @@ char* get_full_name(const char* name) {
 
 void pipe_create(file_desc* pipe, const char* name) {
     char* full_name = get_full_name(name);
+    pipe->name = name;
     pipe->hPipe = CreateNamedPipe(
         TEXT(full_name),
         PIPE_ACCESS_DUPLEX,
@@ -24,14 +25,28 @@ void pipe_create(file_desc* pipe, const char* name) {
     ); free(full_name);
 }
 
-void pipe_open(file_desc* pipe, const char* name, int mode) {
-    char* full_name = get_full_name(name);
-    file_open(pipe, full_name, mode);
+int pipe_open(file_desc* pipe, int mode) {
+    if (mode == READONLY) {
+        pipe->isReadPipe = TRUE;
+        return ConnectNamedPipe(pipe->hPipe, NULL);
+    }
+        
+    char* full_name = get_full_name(pipe->name);
+    int ret = file_open(pipe, full_name, mode, 1);
     free(full_name);
+    return ret;
 }
 
-void file_open(file_desc* pipe, const char* name, int mode) {
-    pipe->hPipe = CreateFile(TEXT(name), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL); 
+void pipe_close(file_desc* pipe) {
+    if (pipe->isReadPipe) {
+        DisconnectNamedPipe(pipe->hPipe);
+    } else file_close(pipe);
+}
+
+int file_open(file_desc* pipe, const char* name, int mode, int lock) {
+    if (!lock) pipe->hPipe = CreateFile(TEXT(name), mode,  FILE_SHARE_WRITE | FILE_SHARE_READ, NULL, OPEN_ALWAYS, 0, NULL);
+    else pipe->hPipe = CreateFile(TEXT(name), mode,  0, NULL, OPEN_ALWAYS, 0, NULL);
+    return pipe->hPipe != INVALID_HANDLE_VALUE;
 }
 
 char* file_read(file_desc* pipe, char buf[], unsigned int size) {
@@ -64,10 +79,11 @@ void pipe_create(file_desc* pipe, const char* name) {
     free(full_name);
 }
 
-void pipe_open(file_desc* pipe, const char* name, int mode) {
+int pipe_open(file_desc* pipe, const char* name, int mode) {
     char* full_name = get_full_name(name);
-    file_open(pipe, full_name, mode, 0);
+    int ret = file_open(pipe, full_name, mode, 0);
     free(full_name);
+    return ret;
 }
 
 int file_open(file_desc* pipe, const char* name, int mode, int lock) {

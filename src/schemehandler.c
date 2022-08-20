@@ -25,11 +25,17 @@ typedef struct app_args {
     char* scheme;
 } app_args;
 
+typedef struct scheme_handler {
+    file_desc pipe;
+    pthread_t th;
+} scheme_handler;
+
 static struct option_item options[] = {{.letter = 'l', .name = "uri-launch"},
                                        {.letter = 'r', .name = "uri-register"},
                                        {.letter = 'h', .name = "help"}};
 
-bool scheme_register_linux(const char* protocol, const char* handler, bool terminal) {
+#if defined(__linux__)
+bool scheme_register(const char* protocol, const char* handler, bool terminal) {
     // open file /usr/share/applications/[protocol].desktop and write the string
     char* full_dir = str_create_fmt("%s/.local/share/applications/%s.desktop", getenv("HOME"), protocol);
     FILE *fp = fopen(full_dir, "w");
@@ -43,25 +49,19 @@ bool scheme_register_linux(const char* protocol, const char* handler, bool termi
     system(command);
     str_destroy(&command);
 }
-
-bool scheme_register_windows(const char* protocol, const char* handler, bool terminal) {
-    return false;
-}
-
-bool scheme_register_mac(const char* protocol, const char* handler, bool terminal) {
-    return false;
-}
-
+#elif defined(_WIN32) || defined(_WIN64)
 bool scheme_register(const char* protocol, const char* handler, bool terminal) {
-    #if defined(__linux__)
-    return scheme_register_linux(protocol, handler, terminal);
-    #elif defined(_WIN32) || defined(_WIN64)
-    return scheme_register_windows(protocol, handler, terminal);
-    #elif defined(TARGET_OS_MAC) || defined(__MACH__)
-    return scheme_register_mac(protocol, handler, terminal);
-    #endif
     return false;
 }
+#elif defined(TARGET_OS_MAC) || defined(__MAC__)
+bool scheme_register(const char* protocol, const char* handler, bool terminal) {
+    return false;
+}
+#else
+bool scheme_register(const char* protocol, const char* handler, bool terminal) {
+    return false;
+}
+#endif
 
 bool scheme_open(const char* url) {
     char* command;
@@ -105,24 +105,26 @@ bool save(app_args* args, const char* dir) {
 }
 
 void* thread_task(void* arg) {
-    scheme_handler* handler = (scheme_handler*) arg;
-    char buf[FILENAME_MAX];
+    callback_data* data = (callback_data*) arg;
+    scheme_handler* handler = data->handler;
     while (true) {
-        while (handler->info);
-        file_desc pipe;
-        pipe_open(&pipe, handler->pipe_name, READONLY);
+        int connected = pipe_open(&handler->pipe, READONLY);
         char buf[FILENAME_MAX];
-        file_read(&pipe, buf, FILENAME_MAX);
-        file_close(&pipe);
-        handler->value = str_create(buf);
-        handler->info = true;
+        file_read(&handler->pipe, buf, FILENAME_MAX);
+        pipe_close(&handler->pipe);
+        char* value = str_create(buf);
+        data->callback(data->data, value);
+        str_destroy(&value);
     }
 }
 
-scheme_handler* app_open(int argc, char* argv[], const char* dir) {
+scheme_handler* app_open(int argc, char* argv[], const char* dir, void* (*callback)(void* data, const char* value), void* data) {
     
     scheme_handler* handler = (scheme_handler*) malloc(sizeof(scheme_handler));
-    handler->info = false;
+    callback_data* callback_dat = (callback_data*) malloc(sizeof(callback_data));
+    callback_dat->callback = callback;
+    callback_dat->handler = handler;
+    callback_dat->data = data;
 
     app_args args;
     args.launch = "";
@@ -130,7 +132,6 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir) {
     args.regist = true;
     args.terminal = true;
     args.executable = getexecname();
-    printf("%s\n", args.executable);
     char* config_dir = getexecdir();
     path_add(&config_dir, dir);
     path_add(&config_dir, "scheme_config.ini");
@@ -154,18 +155,14 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir) {
         }
     }
 
-    file_desc pipe;
-    pipe_create(&pipe, "myfifo");
+    pipe_create(&handler->pipe, "myfifo");
+
+    char* lock_name = getexecdir();
+    path_add(&lock_name, "mylock.lock");
 
     file_desc lock;
-    if(file_open(&lock, args.executable, READONLY | EXCLUSIVE | O_NONBLOCK, true)) {
-        if (!*args.launch) return NULL;
-        // this is the second instance
-        pipe_open(&pipe, pipe.name, WRITEONLY);
-        file_write(&pipe, args.launch);
-        file_close(&pipe);
-        return NULL;
-    } else {
+    if(file_open(&lock, lock_name, READONLY, true)) {
+        str_destroy(&lock_name);
         // this is the first instance
         if (!args.regist) {
             if (scheme_register(args.scheme, args.executable, args.terminal)) {
@@ -178,37 +175,20 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir) {
             }
         }
 
-        handler->pipe_name = pipe.name;
-        pthread_create(&handler->th, NULL, &thread_task, handler);
+        pthread_create(&handler->th, NULL, &thread_task, callback_dat);
 
         if (*args.launch) {
-            pipe_open(&pipe, pipe.name, WRITEONLY);
-            file_write(&pipe, args.launch);
-            file_close(&pipe);
-        }
-
-        return handler;
+            pipe_open(&handler->pipe, WRITEONLY);
+            file_write(&handler->pipe, args.launch);
+            pipe_close(&handler->pipe);
+        } return handler;
+    } else {
+        str_destroy(&lock_name);
+        if (!*args.launch) return NULL;
+        // this is the second instance
+        pipe_open(&handler->pipe, WRITEONLY);
+        file_write(&handler->pipe, args.launch);
+        pipe_close(&handler->pipe);
+        return NULL;
     }
-}
-
-// recreate this in any language (only here for testing)
-void uri_handle_loop(void* in) {
-    callback_data* data = (callback_data*) in;
-    scheme_handler* handler = data->handler;
-    while (true) {
-        while (!handler->info);
-        data->callback(data->data, handler->value);
-        handler->info = false;
-    } // free handler and free data
-}
-
-// recreate this in any language (only here for testing)
-pthread_t listen_callback(scheme_handler* handler, void* (*callback)(void* data, const char* value), void* in) {
-    callback_data* data = (callback_data*) malloc(sizeof(callback_data));
-    data->data = in;
-    data->handler = handler;
-    data->callback = callback;
-    pthread_t ptr;
-    pthread_create(&ptr, NULL, &uri_handle_loop, data);
-    return ptr;
 }
