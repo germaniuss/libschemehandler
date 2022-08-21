@@ -30,8 +30,8 @@ static struct option_item options[] = {{.letter = 'l', .name = "uri-launch"},
                                        {.letter = 'r', .name = "uri-register"},
                                        {.letter = 'h', .name = "help"}};
 
-#if defined(__linux__)
 bool scheme_register(const char* protocol, const char* exec, bool terminal) {
+    #if defined(__linux__)
     // open file /usr/share/applications/[protocol].desktop and write the string
     char* full_dir = str_create_fmt("%s/.local/share/applications/%s.desktop", getenv("HOME"), protocol);
     FILE *fp = fopen(full_dir, "w");
@@ -44,9 +44,8 @@ bool scheme_register(const char* protocol, const char* exec, bool terminal) {
     char* command = str_create_fmt("xdg-mime default %s.desktop x-scheme-handler/%s", protocol, protocol);
     system(command);
     str_destroy(&command);
-}
-#elif defined(_WIN32) || defined(_WIN64)
-bool scheme_register(const char* protocol, const char* exec, bool terminal) {
+    
+    #elif defined(_WIN32) || defined(_WIN64)
     HKEY key;
     HKEY subdir;
     LPCTSTR value;
@@ -88,16 +87,16 @@ bool scheme_register(const char* protocol, const char* exec, bool terminal) {
 
     printf("Key changed in registry \n");
     return true;
-}
-#elif defined(TARGET_OS_MAC) || defined(__MAC__)
-bool scheme_register(const char* protocol, const char* exec, bool terminal) {
+
+    #elif defined(TARGET_OS_MAC) || defined(__MAC__)
     return false;
-}
-#else
-bool scheme_register(const char* protocol, const char* exec, bool terminal) {
+
+    #else
     return false;
+    
+    #endif
 }
-#endif
+
 
 bool scheme_open(const char* url) {
     char* command;
@@ -121,13 +120,7 @@ int process_ini(void *arg, int line, const char *section, const char *key, const
     return 0;
 }
 
-int load(app_args* args, const char* dir) {
-    int rc = ini_parse_file(args, process_ini, dir);
-    return rc;
-}
-
-void* thread_task(void* arg) {
-    scheme_handler* handler = (scheme_handler*) arg;
+void* thread_task(scheme_handler* handler) {
     while (true) {
         pipe_open(&handler->pipe, READONLY);
         char buf[FILENAME_MAX];
@@ -142,21 +135,25 @@ void* thread_task(void* arg) {
 
 scheme_handler* app_open(int argc, char* argv[], const char* dir, const char* name, void* (*callback)(void* data, const char* endpoint, const char* query), void* data) {
     // Load the config
-    app_args args = {.launch = NULL, 
-                     .executable = getexecname(),
-                     .scheme = NULL, 
-                     .terminal = true,
-                     .config_dir = getexecdir()};
+    app_args args = {
+        .launch = NULL, 
+        .executable = getexecname(),
+        .scheme = NULL, 
+        .terminal = true,
+        .config_dir = getexecdir()
+    };
 
     path_add(&args.config_dir, dir);
     path_add(&args.config_dir, name);
     str_append(&args.config_dir, ".ini");
-    load(&args, args.config_dir);
+    ini_parse_file(&args, process_ini, dir);
 
     // Read the inputed options
-    struct option opt = {.argv = argv,
-                         .count = sizeof(options) / sizeof(options[0]),
-                         .options = options};
+    struct option opt = {
+        .argv = argv,
+        .count = sizeof(options) / sizeof(options[0]),
+        .options = options
+    };
 
     char *value;
     for (int i = 1; i < argc; i++) {
