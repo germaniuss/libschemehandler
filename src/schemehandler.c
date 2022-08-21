@@ -41,7 +41,7 @@ bool scheme_register(const char* protocol, const char* exec, bool terminal) {
     FILE *fp = fopen(full_dir, "w");
     str_destroy(&full_dir);
     if (fp == NULL) return NULL;
-    fprintf(fp, "[Desktop Entry]\nExec=%s --uri-launch=%%U\nMimeType=x-scheme-handler/%s;\nName=%s\nTerminal=%s\nType=Application", handler, protocol, protocol, terminal ? "true" : "false");
+    fprintf(fp, "[Desktop Entry]\nExec=%s --uri-launch=%%U\nMimeType=x-scheme-handler/%s;\nName=%s\nTerminal=%s\nType=Application", exec, protocol, protocol, terminal ? "true" : "false");
     fclose(fp);
 
     // add the uri scheme
@@ -150,22 +150,14 @@ void* thread_task(void* arg) {
         char buf[FILENAME_MAX];
         file_read(&handler->pipe, buf, FILENAME_MAX);
         pipe_close(&handler->pipe);
-        char* value = str_create(buf);
-        char* save = NULL;
-        str_token_begin(value, &save, "://");
-        const char* token = str_token_begin(value, &save, "?");
-        char* endpoint = str_create(token);
-        const char* token = str_token_begin(value, &save, "?");
-        char* query = str_create(token);
+        strtok(buf, "/");
+        char* endpoint = strtok(strtok(NULL, "/"), "?");
+        char* query = strtok(NULL, "?");
         data->callback(data->data, endpoint, query);
-        str_destroy(&value);
-        str_destroy(&endpoint);
-        str_destroy(&query);
     }
 }
 
 scheme_handler* app_open(int argc, char* argv[], const char* dir, void* (*callback)(void* data, const char* endpoint, const char* query), void* data) {
-    
     scheme_handler* handler = (scheme_handler*) malloc(sizeof(scheme_handler));
     callback_data* callback_dat = (callback_data*) malloc(sizeof(callback_data));
     callback_dat->callback = callback;

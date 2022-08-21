@@ -2,7 +2,7 @@
 #include <stdio.h>
 
 void* handle_url_request(void* data, const char* endpoint, const char* query) {
-    printf("%s\n", endpoint);
+    printf("%s %s\n", endpoint, query);
 }
 
 int main(int argc, char* argv[]) {
