@@ -18,7 +18,7 @@ typedef struct callback_data {
 } callback_data;
 
 typedef struct app_args {
-    bool regist;
+    bool to_register;
     bool terminal;
     char* launch;
     char* executable;
@@ -119,8 +119,8 @@ bool scheme_open(const char* url) {
 
 int process_ini(void *arg, int line, const char *section, const char *key, const char *value) {
     app_args* args = arg;
+    if (strcmp(section, "SchemeHandler")) return 0;
     if (!strcmp(key, "scheme")) args->scheme = str_create(value);
-    else if (!strcmp(key, "registered")) args->regist = strcmp(value, "false") ? true: false;
     else if (!strcmp(key, "terminal")) args->terminal = strcmp(value, "false") ? true: false;
     return 0;
 }
@@ -134,7 +134,6 @@ bool save(app_args* args, const char* dir) {
     FILE *fp = fopen(dir, "w");
     if (fp == NULL) return NULL;
 
-    fprintf(fp, "registered=%s\n", args->regist ? "true" : "false");
     fprintf(fp, "scheme=%s\n", args->scheme);
     fprintf(fp, "terminal=%s\n", args->terminal ? "true" : "false");
         
@@ -157,35 +156,40 @@ void* thread_task(void* arg) {
     }
 }
 
-scheme_handler* app_open(int argc, char* argv[], const char* dir, void* (*callback)(void* data, const char* endpoint, const char* query), void* data) {
+scheme_handler* app_open(int argc, char* argv[], const char* dir, const char* name, void* (*callback)(void* data, const char* endpoint, const char* query), void* data) {
+    // Create the callback handler
     scheme_handler* handler = (scheme_handler*) malloc(sizeof(scheme_handler));
     callback_data* callback_dat = (callback_data*) malloc(sizeof(callback_data));
     callback_dat->callback = callback;
     callback_dat->handler = handler;
     callback_dat->data = data;
 
+    // Load the config
     app_args args;
     args.launch = "";
     args.scheme = "";
-    args.regist = true;
+    args.to_register = false;
     args.terminal = true;
     args.executable = getexecname();
     char* config_dir = getexecdir();
     path_add(&config_dir, dir);
-    path_add(&config_dir, "scheme_config.ini");
-    
+    path_add(&config_dir, name);
+    str_append(&config_dir, ".ini");
     load(&args, config_dir);
 
+    // Read the inputed options
     struct option opt = {.argv = argv,
                          .count = sizeof(options) / sizeof(options[0]),
                          .options = options};
 
     char *value;
     for (int i = 1; i < argc; i++) {
-        char c = option_at(&opt, i, &value);
-        switch (c) {
+        switch (option_at(&opt, i, &value)) {
         case 'l':
             args.launch = str_create(value);
+            break;
+        case 'r':
+            args.to_register = true;
             break;
         case '?':
             printf("Unknown option : %s \n", argv[i]);
@@ -193,28 +197,25 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir, void* (*callba
         }
     }
 
-    pipe_create(&handler->pipe, "myfifo");
+    // Register app if needed
+    if (args.to_register) {
+        if (scheme_register(args.scheme, args.executable, args.terminal)) {
+            printf("Successfully registered uri scheme\n");
+            return NULL;
+        } else {
+            printf("Failed to configure the uri scheme\n");
+            return NULL;
+        }
+    }
 
+    // Create the piping and the file lock
+    pipe_create(&handler->pipe, "myfifo");
     char* lock_name = getexecdir();
     path_add(&lock_name, "mylock.lock");
-
     file_desc lock;
     if(file_open(&lock, lock_name, READONLY, true)) {
         str_destroy(&lock_name);
-        // this is the first instance
-        if (!args.regist) {
-            if (scheme_register(args.scheme, args.executable, args.terminal)) {
-                printf("Successfully registered uri scheme\n");
-                args.regist = true;
-                save(&args, config_dir);
-            } else {
-                printf("Failed to configure the uri scheme\n");
-                return NULL;
-            }
-        }
-
         pthread_create(&handler->th, NULL, &thread_task, callback_dat);
-
         if (*args.launch) {
             pipe_open(&handler->pipe, WRITEONLY);
             file_write(&handler->pipe, args.launch);
@@ -223,7 +224,6 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir, void* (*callba
     } else {
         str_destroy(&lock_name);
         if (!*args.launch) return NULL;
-        // this is the second instance
         pipe_open(&handler->pipe, WRITEONLY);
         file_write(&handler->pipe, args.launch);
         pipe_close(&handler->pipe);
