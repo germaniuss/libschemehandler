@@ -56,36 +56,16 @@ bool scheme_register(const char* protocol, const char* exec, bool terminal) {
     }
 
     value = TEXT("URL: URL Protocol");
-    if (RegSetValueEx(key, NULL, 0, REG_SZ, (LPBYTE)value, (_tcslen(value)+1) * sizeof(TCHAR)) != ERROR_SUCCESS) {
-        printf("Error %u ", (unsigned int)GetLastError());
-        RegCloseKey(key);
-        return false;
-    }
-
+    RegSetValueEx(key, NULL, 0, REG_SZ, (LPBYTE)value, (_tcslen(value)+1) * sizeof(TCHAR))
     value = TEXT("");
-    if (RegSetValueEx(key, TEXT("URL Protocol"), 0, REG_SZ, (LPBYTE)value, (_tcslen(value)+1) * sizeof(TCHAR)) != ERROR_SUCCESS) {
-        printf("Error %u ", (unsigned int)GetLastError());
-        RegCloseKey(key);
-        return false;
-    }
-
-    if (RegCreateKeyEx(key, TEXT("shell\\open\\command"), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &subdir, NULL) != ERROR_SUCCESS) {
-        printf("Error %u ", (unsigned int)GetLastError());
-        RegCloseKey(key);
-        return false;
-    }
-
+    RegSetValueEx(key, TEXT("URL Protocol"), 0, REG_SZ, (LPBYTE)value, (_tcslen(value)+1) * sizeof(TCHAR))
+    RegCreateKeyEx(key, TEXT("shell\\open\\command"), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &subdir, NULL)
     RegCloseKey(key);
     char* val = str_create_fmt("\"%s\" --uri-launch=\"%%1\"", exec);
     value = TEXT(val);
-    if (RegSetValueEx(subdir, NULL, 0, REG_SZ, (LPBYTE)value, (_tcslen(value)+1) * sizeof(TCHAR)) != ERROR_SUCCESS) {
-        RegCloseKey(subdir);
-        printf("Error %u ", (unsigned int)GetLastError());
-        return false;
-    } RegCloseKey(subdir);
+    RegSetValueEx(subdir, NULL, 0, REG_SZ, (LPBYTE)value, (_tcslen(value)+1) * sizeof(TCHAR))
+    RegCloseKey(subdir);
     str_destroy(&val);
-
-    printf("Key changed in registry \n");
     return true;
 
     #elif defined(TARGET_OS_MAC) || defined(__MAC__)
@@ -93,10 +73,9 @@ bool scheme_register(const char* protocol, const char* exec, bool terminal) {
 
     #else
     return false;
-    
+
     #endif
 }
-
 
 bool scheme_open(const char* url) {
     char* command;
@@ -112,14 +91,6 @@ bool scheme_open(const char* url) {
     return true;
 }
 
-int process_ini(void *arg, int line, const char *section, const char *key, const char *value) {
-    app_args* args = arg;
-    if (strcmp(section, "SchemeHandler")) return 0;
-    if (!strcmp(key, "scheme")) args->scheme = str_create(value);
-    else if (!strcmp(key, "terminal")) args->terminal = strcmp(value, "false") ? true: false;
-    return 0;
-}
-
 void* thread_task(scheme_handler* handler) {
     while (true) {
         pipe_open(&handler->pipe, READONLY);
@@ -131,6 +102,14 @@ void* thread_task(scheme_handler* handler) {
         char* query = strtok(NULL, "?");
         handler->callback(handler->data, endpoint, query);
     }
+}
+
+int process_ini(void *arg, int line, const char *section, const char *key, const char *value) {
+    app_args* args = arg;
+    if (strcmp(section, "SchemeHandler")) return 0;
+    if (!strcmp(key, "scheme")) args->scheme = str_create(value);
+    else if (!strcmp(key, "terminal")) args->terminal = strcmp(value, "false") ? true: false;
+    return 0;
 }
 
 scheme_handler* app_open(int argc, char* argv[], const char* dir, const char* name, void* (*callback)(void* data, const char* endpoint, const char* query), void* data) {
