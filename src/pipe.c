@@ -80,7 +80,7 @@ void pipe_close(file_desc* pipe) {
 
 int file_open(file_desc* pipe, const char* name, int mode, int lock) {
     pipe->fd = open(name, mode, 0666);
-    if (lock) return (!flock(pipe->fd, LOCK_EX | LOCK_NB) || EWOULDBLOCK != errno);
+    if (lock) return (flock(pipe->fd, LOCK_EX | LOCK_NB) != -1 && EWOULDBLOCK != errno);
     return pipe->fd != -1;
 }
 
