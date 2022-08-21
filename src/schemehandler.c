@@ -11,23 +11,19 @@
 #include "path.h"
 #include "pipe.h"
 
-typedef struct callback_data {
-    scheme_handler* handler;
-    void* data;
-    void* (*callback)(void* data, const char* endpoint, const char* query);
-} callback_data;
-
 typedef struct app_args {
-    bool to_register;
     bool terminal;
     char* launch;
     char* executable;
     char* scheme;
+    char* config_dir;
 } app_args;
 
 typedef struct scheme_handler {
     file_desc pipe;
     pthread_t th;
+    void* data;
+    void* (*callback)(void* data, const char* endpoint, const char* query);
 } scheme_handler;
 
 static struct option_item options[] = {{.letter = 'l', .name = "uri-launch"},
@@ -130,20 +126,8 @@ int load(app_args* args, const char* dir) {
     return rc;
 }
 
-bool save(app_args* args, const char* dir) {
-    FILE *fp = fopen(dir, "w");
-    if (fp == NULL) return NULL;
-
-    fprintf(fp, "scheme=%s\n", args->scheme);
-    fprintf(fp, "terminal=%s\n", args->terminal ? "true" : "false");
-        
-    fclose(fp);
-    return 1;
-}
-
 void* thread_task(void* arg) {
-    callback_data* data = (callback_data*) arg;
-    scheme_handler* handler = data->handler;
+    scheme_handler* handler = (scheme_handler*) arg;
     while (true) {
         pipe_open(&handler->pipe, READONLY);
         char buf[FILENAME_MAX];
@@ -152,30 +136,27 @@ void* thread_task(void* arg) {
         strtok(buf, "/");
         char* endpoint = strtok(strtok(NULL, "/"), "?");
         char* query = strtok(NULL, "?");
-        data->callback(data->data, endpoint, query);
+        handler->callback(handler->data, endpoint, query);
     }
 }
 
 scheme_handler* app_open(int argc, char* argv[], const char* dir, const char* name, void* (*callback)(void* data, const char* endpoint, const char* query), void* data) {
     // Create the callback handler
     scheme_handler* handler = (scheme_handler*) malloc(sizeof(scheme_handler));
-    callback_data* callback_dat = (callback_data*) malloc(sizeof(callback_data));
-    callback_dat->callback = callback;
-    callback_dat->handler = handler;
-    callback_dat->data = data;
+    handler->data = data;
+    handler->callback = callback;
 
     // Load the config
-    app_args args;
-    args.launch = "";
-    args.scheme = "";
-    args.to_register = false;
-    args.terminal = true;
-    args.executable = getexecname();
-    char* config_dir = getexecdir();
-    path_add(&config_dir, dir);
-    path_add(&config_dir, name);
-    str_append(&config_dir, ".ini");
-    load(&args, config_dir);
+    app_args args = {.launch = NULL, 
+                     .executable = getexecname(),
+                     .scheme = NULL, 
+                     .terminal = true,
+                     .config_dir = getexecdir()};
+
+    path_add(&args.config_dir, dir);
+    path_add(&args.config_dir, name);
+    str_append(&args.config_dir, ".ini");
+    load(&args, args.config_dir);
 
     // Read the inputed options
     struct option opt = {.argv = argv,
@@ -189,21 +170,14 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir, const char* na
             args.launch = str_create(value);
             break;
         case 'r':
-            args.to_register = true;
-            break;
+            if (scheme_register(args.scheme, args.executable, args.terminal))
+                printf("Successfully registered uri scheme\n");
+            else printf("Failed to configure the uri scheme\n");
+            free(handler);
+            return NULL;
         case '?':
             printf("Unknown option : %s \n", argv[i]);
-            break;
-        }
-    }
-
-    // Register app if needed
-    if (args.to_register) {
-        if (scheme_register(args.scheme, args.executable, args.terminal)) {
-            printf("Successfully registered uri scheme\n");
-            return NULL;
-        } else {
-            printf("Failed to configure the uri scheme\n");
+            free(handler);
             return NULL;
         }
     }
@@ -213,20 +187,20 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir, const char* na
     char* lock_name = getexecdir();
     path_add(&lock_name, "mylock.lock");
     file_desc lock;
-    if(file_open(&lock, lock_name, READONLY, true)) {
-        str_destroy(&lock_name);
-        pthread_create(&handler->th, NULL, &thread_task, callback_dat);
-        if (*args.launch) {
+    int opened = file_open(&lock, lock_name, READONLY, true);
+    str_destroy(&lock_name);
+    if (opened) {
+        pthread_create(&handler->th, NULL, &thread_task, handler);
+        if (args.launch) {
             pipe_open(&handler->pipe, WRITEONLY);
             file_write(&handler->pipe, args.launch);
             pipe_close(&handler->pipe);
         } return handler;
-    } else {
-        str_destroy(&lock_name);
-        if (!*args.launch) return NULL;
+    } else if (args.launch) {
         pipe_open(&handler->pipe, WRITEONLY);
         file_write(&handler->pipe, args.launch);
         pipe_close(&handler->pipe);
+        free(handler);
         return NULL;
     }
 }
