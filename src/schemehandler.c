@@ -35,7 +35,7 @@ static struct option_item options[] = {{.letter = 'l', .name = "uri-launch"},
                                        {.letter = 'h', .name = "help"}};
 
 #if defined(__linux__)
-bool scheme_register(const char* protocol, const char* handler, bool terminal) {
+bool scheme_register(const char* protocol, const char* exec, bool terminal) {
     // open file /usr/share/applications/[protocol].desktop and write the string
     char* full_dir = str_create_fmt("%s/.local/share/applications/%s.desktop", getenv("HOME"), protocol);
     FILE *fp = fopen(full_dir, "w");
@@ -50,46 +50,55 @@ bool scheme_register(const char* protocol, const char* handler, bool terminal) {
     str_destroy(&command);
 }
 #elif defined(_WIN32) || defined(_WIN64)
-bool scheme_register(const char* protocol, const char* handler, bool terminal) {
-    DWORD number = 0x00000001; 
+bool scheme_register(const char* protocol, const char* exec, bool terminal) {
     HKEY key;
+    HKEY subdir;
+    LPCTSTR value;
 
-    /*
-    RegistryKey key;
-    key = Registry.ClassesRoot.CreateSubKey("foo");
-    key.SetValue("", "URL: Foo Protocol");
-    key.SetValue("URL Protocol","");
-
-    key = key.CreateSubKey("shell");
-    key = key.CreateSubKey("open");
-    key = key.CreateSubKey("command");
-    key.SetValue("", "C:\\oggsplit.exe");
-
-    */
-
-    if (RegOpenKeyExW(HKEY_LOCAL_MACHINE, L"SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Authentication\\LogonUI\\Background", 0, KEY_SET_VALUE | KEY_WOW64_64KEY, &key) == ERROR_SUCCESS) {
-        printf("Key location open successful \n");
-        if (RegSetValueExW(key, L"OEMBackground", 0, REG_DWORD, (LPBYTE)&number, sizeof(DWORD)) == ERROR_SUCCESS) {
-            printf("Key changed in registry \n");
-        } else {
-            printf("Key not changed in registry \n");
-            printf("Error %u ", (unsigned int)GetLastError());
-            return false;
-        }
-        RegCloseKey(key);
-        return true;
+    if (RegCreateKeyEx(HKEY_CLASSES_ROOT, TEXT(protocol), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &key, NULL) != ERROR_SUCCESS) {
+        printf("Error %u ", (unsigned int)GetLastError());
+        return false;
     }
-    printf("Unsuccessful in opening key  \n");
-    printf("Cannot find key value in registry \n");
-    printf("Error: %u ", (unsigned int)GetLastError());
-    return false;
+
+    value = TEXT("URL: URL Protocol");
+    if (RegSetValueEx(key, NULL, 0, REG_SZ, (LPBYTE)value, (_tcslen(value)+1) * sizeof(TCHAR)) != ERROR_SUCCESS) {
+        printf("Error %u ", (unsigned int)GetLastError());
+        RegCloseKey(key);
+        return false;
+    }
+
+    value = TEXT("");
+    if (RegSetValueEx(key, TEXT("URL Protocol"), 0, REG_SZ, (LPBYTE)value, (_tcslen(value)+1) * sizeof(TCHAR)) != ERROR_SUCCESS) {
+        printf("Error %u ", (unsigned int)GetLastError());
+        RegCloseKey(key);
+        return false;
+    }
+
+    if (RegCreateKeyEx(key, TEXT("shell\\open\\command"), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &subdir, NULL) != ERROR_SUCCESS) {
+        printf("Error %u ", (unsigned int)GetLastError());
+        RegCloseKey(key);
+        return false;
+    }
+
+    RegCloseKey(key);
+    char* val = str_create_fmt("\"%s\" --uri-launch=\"%%1\"", exec);
+    value = TEXT(val);
+    if (RegSetValueEx(subdir, NULL, 0, REG_SZ, (LPBYTE)value, (_tcslen(value)+1) * sizeof(TCHAR)) != ERROR_SUCCESS) {
+        RegCloseKey(subdir);
+        printf("Error %u ", (unsigned int)GetLastError());
+        return false;
+    } RegCloseKey(subdir);
+    str_destroy(&val);
+
+    printf("Key changed in registry \n");
+    return true;
 }
 #elif defined(TARGET_OS_MAC) || defined(__MAC__)
-bool scheme_register(const char* protocol, const char* handler, bool terminal) {
+bool scheme_register(const char* protocol, const char* exec, bool terminal) {
     return false;
 }
 #else
-bool scheme_register(const char* protocol, const char* handler, bool terminal) {
+bool scheme_register(const char* protocol, const char* exec, bool terminal) {
     return false;
 }
 #endif
@@ -122,8 +131,6 @@ int load(app_args* args, const char* dir) {
 }
 
 bool save(app_args* args, const char* dir) {
-    char* key; char* value;
-
     FILE *fp = fopen(dir, "w");
     if (fp == NULL) return NULL;
 
@@ -139,7 +146,7 @@ void* thread_task(void* arg) {
     callback_data* data = (callback_data*) arg;
     scheme_handler* handler = data->handler;
     while (true) {
-        int connected = pipe_open(&handler->pipe, READONLY);
+        pipe_open(&handler->pipe, READONLY);
         char buf[FILENAME_MAX];
         file_read(&handler->pipe, buf, FILENAME_MAX);
         pipe_close(&handler->pipe);
