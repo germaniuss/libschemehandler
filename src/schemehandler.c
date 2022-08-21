@@ -141,11 +141,6 @@ void* thread_task(void* arg) {
 }
 
 scheme_handler* app_open(int argc, char* argv[], const char* dir, const char* name, void* (*callback)(void* data, const char* endpoint, const char* query), void* data) {
-    // Create the callback handler
-    scheme_handler* handler = (scheme_handler*) malloc(sizeof(scheme_handler));
-    handler->data = data;
-    handler->callback = callback;
-
     // Load the config
     app_args args = {.launch = NULL, 
                      .executable = getexecname(),
@@ -173,23 +168,25 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir, const char* na
             if (scheme_register(args.scheme, args.executable, args.terminal))
                 printf("Successfully registered uri scheme\n");
             else printf("Failed to configure the uri scheme\n");
-            free(handler);
             return NULL;
         case '?':
             printf("Unknown option : %s \n", argv[i]);
-            free(handler);
             return NULL;
         }
     }
 
     // Create the piping and the file lock
-    pipe_create(&handler->pipe, "myfifo");
+    file_desc lock;
     char* lock_name = getexecdir();
     path_add(&lock_name, "mylock.lock");
-    file_desc lock;
     int opened = file_open(&lock, lock_name, READONLY, true);
     str_destroy(&lock_name);
+
     if (opened) {
+        scheme_handler* handler = (scheme_handler*) malloc(sizeof(scheme_handler));
+        handler->data = data;
+        handler->callback = callback;
+        pipe_create(&handler->pipe, "myfifo");
         pthread_create(&handler->th, NULL, &thread_task, handler);
         if (args.launch) {
             pipe_open(&handler->pipe, WRITEONLY);
@@ -197,10 +194,11 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir, const char* na
             pipe_close(&handler->pipe);
         } return handler;
     } else if (args.launch) {
-        pipe_open(&handler->pipe, WRITEONLY);
-        file_write(&handler->pipe, args.launch);
-        pipe_close(&handler->pipe);
-        free(handler);
+        file_desc pipe;
+        pipe_create(&pipe, "myfifo");
+        pipe_open(&pipe, WRITEONLY);
+        file_write(&pipe, args.launch);
+        pipe_close(&pipe);
         return NULL;
     }
 }
