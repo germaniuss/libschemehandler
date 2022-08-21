@@ -154,7 +154,7 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir, const char* na
     // Create the piping and the file lock
     file_desc lock;
     char* lock_name = getexecdir();
-    path_add(&lock_name, "mylock.lock");
+    path_add(&lock_name, "pid.lock");
     int opened = file_open(&lock, lock_name, READONLY, true);
     str_destroy(&lock_name);
 
@@ -162,7 +162,7 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir, const char* na
         scheme_handler* handler = (scheme_handler*) malloc(sizeof(scheme_handler));
         handler->data = data;
         handler->callback = callback;
-        pipe_create(&handler->pipe, "myfifo");
+        pipe_create(&handler->pipe, args.scheme);
         pthread_create(&handler->th, NULL, &thread_task, handler);
         if (args.launch) {
             pipe_open(&handler->pipe, WRITEONLY);
@@ -171,7 +171,7 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir, const char* na
         } return handler;
     } else if (args.launch) {
         file_desc pipe;
-        pipe_create(&pipe, "myfifo");
+        pipe_create(&pipe, args.scheme);
         pipe_open(&pipe, WRITEONLY);
         file_write(&pipe, args.launch);
         pipe_close(&pipe);
