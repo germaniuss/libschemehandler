@@ -155,7 +155,7 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir, const char* na
     file_desc lock;
     char* lock_name = getexecdir();
     path_add(&lock_name, "pid.lock");
-    int opened = file_open(&lock, lock_name, CREATE | READONLY, true);
+    int opened = file_open(&lock, lock_name, READONLY, true);
     str_destroy(&lock_name);
 
     if (opened) {

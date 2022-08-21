@@ -6,8 +6,6 @@
 #define READONLY GENERIC_READ
 #define WRITEONLY GENERIC_WRITE
 #define READWRITE GENERIC_WRITE | GENERIC_READ
-#define CREATE_EXCLUSIVE CREATE_NEW
-#define CREATE CREATE_ALWAYS
 #else
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -16,8 +14,6 @@
 #define READONLY O_RDONLY
 #define WRITEONLY O_WRONLY
 #define READWRITE O_RDWR
-#define CREATE_EXCLUSIVE O_EXCL | O_CREAT
-#define CREATE O_CREAT
 #endif
 
 #define PIPE_VERSION "1.0.0"
