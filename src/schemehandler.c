@@ -125,7 +125,7 @@ scheme_handler* app_open(int argc, char* argv[], const char* dir, const char* na
     path_add(&args.config_dir, dir);
     path_add(&args.config_dir, name);
     str_append(&args.config_dir, ".ini");
-    ini_parse_file(&args, process_ini, dir);
+    ini_parse_file(&args, process_ini, args.config_dir);
 
     // Read the inputed options
     struct option opt = {
