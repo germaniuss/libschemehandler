@@ -1,8 +1,8 @@
 #include "schemehandler.h"
 #include <stdio.h>
 
-void* handle_url_request(void* data, char* value) {
-    printf("%s\n", value);
+void* handle_url_request(void* data, const char* endpoint, const char* query) {
+    printf("%s\n", endpoint);
 }
 
 int main(int argc, char* argv[]) {

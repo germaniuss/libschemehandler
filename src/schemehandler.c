@@ -14,7 +14,7 @@
 typedef struct callback_data {
     scheme_handler* handler;
     void* data;
-    void* (*callback)(void* data, const char* value);
+    void* (*callback)(void* data, const char* endpoint, const char* query);
 } callback_data;
 
 typedef struct app_args {
@@ -144,12 +144,20 @@ void* thread_task(void* arg) {
         file_read(&handler->pipe, buf, FILENAME_MAX);
         pipe_close(&handler->pipe);
         char* value = str_create(buf);
-        data->callback(data->data, value);
+        char* save = NULL;
+        str_token_begin(value, &save, "://");
+        const char* token = str_token_begin(value, &save, "?");
+        char* endpoint = str_create(token);
+        const char* token = str_token_begin(value, &save, "?");
+        char* query = str_create(token);
+        data->callback(data->data, endpoint, query);
         str_destroy(&value);
+        str_destroy(&endpoint);
+        str_destroy(&query);
     }
 }
 
-scheme_handler* app_open(int argc, char* argv[], const char* dir, void* (*callback)(void* data, const char* value), void* data) {
+scheme_handler* app_open(int argc, char* argv[], const char* dir, void* (*callback)(void* data, const char* endpoint, const char* query), void* data) {
     
     scheme_handler* handler = (scheme_handler*) malloc(sizeof(scheme_handler));
     callback_data* callback_dat = (callback_data*) malloc(sizeof(callback_data));
