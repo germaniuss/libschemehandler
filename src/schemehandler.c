@@ -102,7 +102,7 @@ void* thread_task(scheme_handler* handler) {
         char* endpoint = strtok(NULL, "/");
         char* query = strtok(NULL, "?");
         #else
-        char* endpoint = strtok(strtok(NULL, "/");, "?");
+        char* endpoint = strtok(strtok(NULL, "/"), "?");
         char* query = strtok(NULL, "?");
         #endif
         handler->callback(handler->data, endpoint, query);
