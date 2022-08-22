@@ -28,6 +28,7 @@ char* getcurrentdir() {
 }
 
 void path_add(char** path, const char* dir) {
+    if (dir == NULL) return;
     if (*dir == 'C' || *path == NULL) {
         str_destroy(path);
         *path = str_create(dir);
