@@ -4,7 +4,7 @@
 
 # Compiler settings - Can be customized.
 CC = gcc
-CXXFLAGS = -std=c99 -Wall -g -pedantic -lm -I./src
+CXXFLAGS = -std=c99 -Wall -g -pedantic -lm -I./include -D_XOPEN_SOURCE=700
 LDFLAGS = -L. -lschemehandler
 LIBNAME = libschemehandler
 

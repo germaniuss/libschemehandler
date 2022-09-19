@@ -6,11 +6,7 @@
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <tchar.h>
-#else
-
 #endif
-
-#define SCHEME_HANDLER_VERSION "0.7.2"
 
 typedef struct scheme_handler scheme_handler;
 

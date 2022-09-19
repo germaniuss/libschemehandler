@@ -1,8 +1,31 @@
-#include <stdio.h>
-#include <string.h>
-#include "path.h"
+#ifndef _UTILS_PATH_H
+#define _UTILS_PATH_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#if defined(_WIN32) || defined(_WIN64)
+#include <windows.h>
+#include <direct.h> 
+#else
+#include <unistd.h>
+#endif
+
+char* getexecname();
+char* getexecdir();
+char* getcurrentdir();
+void path_add(char** path, const char* dir);
+
+#ifdef __cplusplus
+}
+#endif
+
+#if defined(_UTILS_IMPL) || defined(_UTILS_PATH_IMPL)
 
 #include "str.h"
+#include <stdio.h>
+#include <string.h>
 
 #if defined(_WIN32) || defined(_WIN64)
 
@@ -62,11 +85,12 @@ char* getcurrentdir() {
 }
 
 void path_add(char** path, const char* dir) {
-    if (dir == NULL) return;
     if (*dir == '/' || *path == NULL) {
         str_destroy(path);
         *path = str_create(dir);
     } else if (*dir) str_append_fmt(path, "/%s", dir);
 }
 
+#endif
+#endif
 #endif
