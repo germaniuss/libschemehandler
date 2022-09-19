@@ -58,14 +58,14 @@ bool scheme_register(const char* protocol, const char* exec, bool terminal) {
     }
 
     value = TEXT("URL: URL Protocol");
-    RegSetValueEx(key, NULL, 0, REG_SZ, (LPBYTE)value, (_tcslen(value)+1) * sizeof(TCHAR))
+    RegSetValueEx(key, NULL, 0, REG_SZ, (LPBYTE)value, (_tcslen(value)+1) * sizeof(TCHAR));
     value = TEXT("");
-    RegSetValueEx(key, TEXT("URL Protocol"), 0, REG_SZ, (LPBYTE)value, (_tcslen(value)+1) * sizeof(TCHAR))
-    RegCreateKeyEx(key, TEXT("shell\\open\\command"), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &subdir, NULL)
+    RegSetValueEx(key, TEXT("URL Protocol"), 0, REG_SZ, (LPBYTE)value, (_tcslen(value)+1) * sizeof(TCHAR));
+    RegCreateKeyEx(key, TEXT("shell\\open\\command"), 0, NULL, REG_OPTION_NON_VOLATILE, KEY_ALL_ACCESS, NULL, &subdir, NULL);
     RegCloseKey(key);
     char* val = str_create_fmt("\"%s\" --uri-launch=\"%%1\"", exec);
     value = TEXT(val);
-    RegSetValueEx(subdir, NULL, 0, REG_SZ, (LPBYTE)value, (_tcslen(value)+1) * sizeof(TCHAR))
+    RegSetValueEx(subdir, NULL, 0, REG_SZ, (LPBYTE)value, (_tcslen(value)+1) * sizeof(TCHAR));
     RegCloseKey(subdir);
     str_destroy(&val);
     return true;
@@ -100,8 +100,13 @@ void* thread_task(scheme_handler* handler) {
         file_read(&handler->pipe, buf, FILENAME_MAX);
         pipe_close(&handler->pipe);
         strtok(buf, "/");
+        #if defined(_WIN32) || defined(_WIN64)
+        char* endpoint = strtok(NULL, "/");
+        char* query = strtok(NULL, "?");
+        #else
         char* endpoint = strtok(strtok(NULL, "/"), "?");
         char* query = strtok(NULL, "?");
+        #endif
         handler->callback(handler->data, endpoint, query);
     }
 }
