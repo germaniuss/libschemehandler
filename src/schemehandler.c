@@ -1,17 +1,10 @@
-#define _UTILS_IMPL
-#include <utils/option.h>
-#include <utils/str.h>
-#include <utils/ini.h>
-#include <utils/path.h>
-#include <utils/pipe.h>
-
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 
-#include "schemehandler.h"
+#include <schemehandler.h>
 
 typedef struct app_args {
     bool terminal;

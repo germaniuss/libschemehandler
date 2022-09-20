@@ -1,6 +1,12 @@
 #ifndef SCHEME_HANDLER_H
 #define SCHEME_HANDLER_H
 
+#include <utils/option.h>
+#include <utils/str.h>
+#include <utils/ini.h>
+#include <utils/path.h>
+#include <utils/pipe.h>
+
 #include <stdbool.h>
 #include <pthread.h>
 
